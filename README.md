@@ -19,8 +19,8 @@ inventory to a stone sword, builds a shelter before night, and fights mobs with 
 
 ## Features
 
-- **29 tools** covering perception, movement, interaction, inventory, crafting and chat
-  ([reference](#tools)).
+- **33 tools** covering perception, movement, interaction, inventory, crafting, chat and
+  multiplayer sessions ([reference](#tools)).
 - **Survival reflexes for slow models**: the mod defends, evades creepers, eats, equips armor
   and swims up every tick (50 ms), so an agent that needs seconds per turn is not killed while
   it thinks ([details](#survival-reflexes)).
@@ -165,7 +165,11 @@ perception, `destructiveHint` for interaction and inventory).
 
 | Tool | Category | Purpose |
 |---|---|---|
-| `observe` | perception | position, rotation, health, food, armor, air, held item, attack cooldown, open screen, crosshair target, `dead`, time, weather |
+| `observe` | perception | position, rotation, health, food, armor, air, held item, attack cooldown, open screen (`gui`), connection state, crosshair target, `dead`, time, weather |
+| `screenshot` | perception | the presented Minecraft frame as an MCP image (`jpeg`/`png`, optional `maxWidth`): world, HUD, chat, titles and open GUIs |
+| `connect` | session | connect to `host[:port]` through Minecraft's normal multiplayer flow; asynchronous, verify with `observe` |
+| `disconnect` | session | leave the world or cancel a connection and return to the title screen |
+| `list_servers` | perception | saved multiplayer entries (name, address, type) from this client profile |
 | `get_blocks` | perception | read a box of blocks as `layers` (ASCII), `rle` or `json` |
 | `scan_blocks` | perception | find specific blocks (ores…) within a radius |
 | `subscribe_blocks` / `get_block_changes` | perception | track block changes around the player (SSE push or polling) |
@@ -358,7 +362,7 @@ checks/                       offline test suite
 | `InventoryMathTest` | transfer stack selection, 2x2 vs 3x3 grid fit, item id normalisation |
 | `PolicyTest` | token bucket timing (fake clock), permissions, control exemption, config parse/round-trip, reflex settings |
 | `ReflexMathTest` | weapon DPS ranking, food choice (gap filling, unsafe/precious food), armor tiers |
-| `ToolSchemaTest` | all 29 tools: unique names, category set, well-formed JSON Schema |
+| `ToolSchemaTest` | all 33 tools: unique names, category set, well-formed JSON Schema |
 
 ### In-game testing
 

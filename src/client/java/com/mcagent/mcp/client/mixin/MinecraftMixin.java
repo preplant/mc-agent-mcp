@@ -1,7 +1,9 @@
 package com.mcagent.mcp.client.mixin;
 
+import com.mcagent.mcp.client.ConnectionState;
 import com.mcagent.mcp.client.control.AgentControl;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -20,5 +22,11 @@ public abstract class MinecraftMixin {
 		if (AgentControl.isBreaking()) {
 			ci.cancel();
 		}
+	}
+
+	/** Remember why a world was left: vanilla only shows it on the disconnect screen. */
+	@Inject(method = "disconnectFromWorld", at = @At("HEAD"))
+	private void mcagent$recordDisconnect(Component reason, CallbackInfo ci) {
+		ConnectionState.recordDisconnect(reason);
 	}
 }

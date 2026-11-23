@@ -17,6 +17,8 @@ public enum ToolCategory {
 	INVENTORY,
 	/** Speaks for the player in chat (visible to other people). */
 	CHAT,
+	/** Connects or disconnects the client's multiplayer session. */
+	SESSION,
 	/** Safety and liveness ({@code stop}, {@code ping}): never disabled, never rate limited. */
 	CONTROL;
 

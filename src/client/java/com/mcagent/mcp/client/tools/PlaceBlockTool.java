@@ -2,6 +2,7 @@ package com.mcagent.mcp.client.tools;
 
 import com.google.gson.JsonObject;
 import com.mcagent.mcp.client.GameBridge;
+import com.mcagent.mcp.client.ScreenNames;
 import com.mcagent.mcp.client.blocks.BlockScanner;
 import com.mcagent.mcp.client.control.AgentControl;
 import com.mcagent.mcp.client.control.PillarTask;
@@ -170,7 +171,7 @@ public final class PlaceBlockTool implements McpTool {
 			o.addProperty("face", hit.getDirection().getName());
 			o.addProperty("blockAtPos", BlockScanner.idOf(level.getBlockState(pos)));
 			if (mc.screen != null) {
-				o.addProperty("screenOpened", mc.screen.getClass().getSimpleName());
+				o.addProperty("screenOpened", ScreenNames.describe(mc.screen));
 			}
 			return o;
 		});
@@ -186,7 +187,7 @@ public final class PlaceBlockTool implements McpTool {
 			for (int i = 0; i < SCREEN_WAIT_POLLS; i++) {
 				String screen = bridge.callOnGameThread(() -> {
 					var s = Minecraft.getInstance().screen;
-					return s == null ? null : s.getClass().getSimpleName();
+					return s == null ? null : ScreenNames.describe(s);
 				});
 				if (screen != null) {
 					out.addProperty("screenOpened", screen);

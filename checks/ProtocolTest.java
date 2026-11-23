@@ -3,10 +3,12 @@ import com.mcagent.mcp.server.McpProtocol;
 import com.mcagent.mcp.server.NotificationBus;
 import com.mcagent.mcp.tools.BatchTool;
 import com.mcagent.mcp.tools.McpTool;
+import com.mcagent.mcp.tools.MediaTool;
 import com.mcagent.mcp.tools.PingTool;
 import com.mcagent.mcp.tools.ToolCategory;
 import com.mcagent.mcp.tools.ToolPolicy;
 import com.mcagent.mcp.tools.ToolRegistry;
+import com.mcagent.mcp.tools.ToolResult;
 import com.google.gson.JsonObject;
 
 import java.io.InputStream;
@@ -35,10 +37,22 @@ public class ProtocolTest {
 		});
 		reg.register(simple("secret_chat", ToolCategory.CHAT));
 		reg.register(simple("walk", ToolCategory.MOVEMENT));
+		reg.register(new MediaTool() {
+			@Override public String name() { return "photo"; }
+			@Override public ToolCategory category() { return ToolCategory.PERCEPTION; }
+			@Override public String description() { return "returns a fake image"; }
+			@Override public JsonObject inputSchema() { return new JsonObject(); }
+			@Override public ToolResult mediaResult(JsonObject args) {
+				JsonObject meta = new JsonObject();
+				meta.addProperty("width", 2);
+				meta.addProperty("height", 2);
+				return ToolResult.image("aGk=", "image/png", meta);
+			}
+		});
 		// chat disabled; movement limited to one call per 2 s
 		ToolPolicy policy = new ToolPolicy().setEnabled(ToolCategory.CHAT, false).limit(ToolCategory.MOVEMENT, 0.5, 1);
 		McpProtocol protocol = new McpProtocol(reg, "mc-agent-mcp", "0.1.0-test", "test playbook", policy);
-		reg.register(new BatchTool(protocol::invokeTool));
+		reg.register(new BatchTool(protocol::invokeTool, protocol::isBatchable));
 		NotificationBus bus = new NotificationBus();
 		McpHttpServer server = new McpHttpServer(protocol, bus, "127.0.0.1", 27994, TOKEN);
 		server.start();
@@ -101,6 +115,18 @@ public class ProtocolTest {
 		Resp call = post("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":"
 				+ "{\"name\":\"ping\",\"arguments\":{}}}", session);
 		check("tools/call ping -> pong", call.body.contains("pong") && call.body.contains("structuredContent"));
+
+		// media tools return a real MCP image block plus metadata
+		Resp photo = post("{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"tools/call\",\"params\":"
+				+ "{\"name\":\"photo\",\"arguments\":{}}}", session);
+		check("media tool -> image content block", photo.body.contains("\"type\":\"image\"")
+				&& photo.body.contains("\"data\":\"aGk=\"") && photo.body.contains("\"mimeType\":\"image/png\""));
+		check("media tool -> metadata text and structuredContent", photo.body.contains("\"width\":2")
+				&& photo.body.contains("structuredContent"));
+		Resp photoBatch = post("{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"tools/call\",\"params\":"
+				+ "{\"name\":\"batch\",\"arguments\":{\"steps\":[{\"tool\":\"photo\"}]}}}", session);
+		check("batch refuses media tools", photoBatch.body.contains("\"completedSteps\":1")
+				&& photoBatch.body.contains("cannot run inside batch"));
 
 		// tools/call failure -> isError, not a protocol error
 		Resp boom = post("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":"

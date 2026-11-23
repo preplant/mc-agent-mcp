@@ -2,12 +2,14 @@ package com.mcagent.mcp.client.tools;
 
 import com.google.gson.JsonObject;
 import com.mcagent.mcp.client.GameBridge;
+import com.mcagent.mcp.client.ScreenNames;
 import com.mcagent.mcp.client.control.AgentControl;
 import com.mcagent.mcp.tools.Args;
 import com.mcagent.mcp.tools.McpTool;
 import com.mcagent.mcp.tools.Schema;
 import com.mcagent.mcp.tools.ToolCategory;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.TitleScreen;
 
 /** stop: release all held keys, cancel mining, optionally close the open screen. */
 public final class StopTool implements McpTool {
@@ -46,11 +48,15 @@ public final class StopTool implements McpTool {
 		return bridge.callOnGameThread(() -> {
 			Minecraft mc = Minecraft.getInstance();
 			JsonObject o = control.stopAll(mc);
-			if (closeScreen && mc.player != null && mc.screen != null
+			if (closeScreen && mc.screen != null
 					&& !(mc.screen instanceof net.minecraft.client.gui.screens.DeathScreen)) {
-				o.addProperty("closedScreen", mc.screen.getClass().getSimpleName());
-				mc.player.closeContainer();
-				if (mc.screen != null) mc.setScreen(null);
+				o.addProperty("closedScreen", ScreenNames.describe(mc.screen));
+				if (mc.player != null) {
+					mc.player.closeContainer();
+				}
+				// A screen can be open with no player (failed connection, title menu): go back
+				// to the title instead of leaving the client on an error screen.
+				mc.setScreen(mc.level == null ? new TitleScreen() : null);
 			}
 			return o;
 		});

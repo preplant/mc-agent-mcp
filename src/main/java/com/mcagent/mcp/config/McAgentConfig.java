@@ -67,6 +67,8 @@ public final class McAgentConfig {
 		limits.put(ToolCategory.INVENTORY, new Limit(20, 40));
 		// Servers kick chat spammers; one message every two seconds with a short burst is safe.
 		limits.put(ToolCategory.CHAT, new Limit(0.5, 3));
+		// Connecting is slow; do not let a confused agent hammer the multi player menu.
+		limits.put(ToolCategory.SESSION, new Limit(0.5, 2));
 	}
 
 	public static McAgentConfig load() {

@@ -4,8 +4,10 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.mcagent.mcp.tools.McpTool;
+import com.mcagent.mcp.tools.MediaTool;
 import com.mcagent.mcp.tools.ToolPolicy;
 import com.mcagent.mcp.tools.ToolRegistry;
+import com.mcagent.mcp.tools.ToolResult;
 
 /**
  * Minimal MCP protocol handler (spec revision 2025-06-18), covering:
@@ -109,55 +111,37 @@ public final class McpProtocol {
 		String name = params.has("name") && params.get("name").isJsonPrimitive()
 				? params.get("name").getAsString() : null;
 		if (name == null) {
-			return toolErrorResult("missing tool name");
+			return ToolResult.error("missing tool name").toJson();
 		}
 		McpTool tool = registry.get(name);
 		if (tool == null) {
-			return toolErrorResult("unknown tool: " + name);
+			return ToolResult.error("unknown tool: " + name).toJson();
 		}
 		ToolPolicy.Decision decision = policy.check(tool);
 		if (!decision.allowed()) {
 			JsonObject payload = new JsonObject();
 			payload.addProperty("error", decision.reason());
 			if (decision.retryAfterMs() > 0) payload.addProperty("retryAfterMs", decision.retryAfterMs());
-			return toolResult(payload, true);
+			return ToolResult.json(payload, true).toJson();
 		}
 		JsonObject args = params.has("arguments") && params.get("arguments").isJsonObject()
 				? params.getAsJsonObject("arguments") : new JsonObject();
 		try {
-			JsonObject payload = tool.call(args);
-			return toolResult(payload, false);
+			ToolResult result = tool instanceof MediaTool media
+					? media.mediaResult(args)
+					: ToolResult.json(tool.call(args));
+			return result.toJson();
 		} catch (McpTool.ToolException e) {
-			JsonObject payload = new JsonObject();
-			payload.addProperty("error", e.getMessage());
-			return toolResult(payload, true);
+			return ToolResult.error(e.getMessage()).toJson();
 		} catch (Exception e) {
-			JsonObject payload = new JsonObject();
-			payload.addProperty("error", "internal error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
-			return toolResult(payload, true);
+			return ToolResult.error("internal error: " + e.getClass().getSimpleName() + ": " + e.getMessage())
+					.toJson();
 		}
 	}
 
-	/** Wrap a payload into the MCP tools/call result shape (content + structuredContent). */
-	private JsonObject toolResult(JsonObject payload, boolean isError) {
-		JsonObject text = new JsonObject();
-		text.addProperty("type", "text");
-		text.addProperty("text", payload.toString());
-		com.google.gson.JsonArray content = new com.google.gson.JsonArray();
-		content.add(text);
-
-		JsonObject result = new JsonObject();
-		result.add("content", content);
-		result.add("structuredContent", payload);
-		if (isError) {
-			result.addProperty("isError", true);
-		}
-		return result;
-	}
-
-	private JsonObject toolErrorResult(String message) {
-		JsonObject payload = new JsonObject();
-		payload.addProperty("error", message);
-		return toolResult(payload, true);
+	/** Whether a named tool is exposed and can run inside {@code batch}. */
+	public boolean isBatchable(String name) {
+		McpTool tool = registry.get(name);
+		return tool == null || tool.batchable();
 	}
 }

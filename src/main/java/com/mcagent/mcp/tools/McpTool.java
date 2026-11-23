@@ -14,6 +14,11 @@ public interface McpTool {
 	/** JSON Schema (draft 2020-12 style object) describing the arguments. */
 	JsonObject inputSchema();
 
+	/** Whether {@code batch} may carry this tool's result. Media tools return false. */
+	default boolean batchable() {
+		return true;
+	}
+
 	/**
 	 * Execute the tool.
 	 *

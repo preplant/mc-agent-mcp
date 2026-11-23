@@ -3,15 +3,22 @@ package com.mcagent.mcp.client.tools;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.mcagent.mcp.client.ChatLog;
+import com.mcagent.mcp.client.ConnectionState;
 import com.mcagent.mcp.client.GameBridge;
+import com.mcagent.mcp.client.ScreenNames;
 import com.mcagent.mcp.client.blocks.BlockScanner;
 import com.mcagent.mcp.client.control.AgentControl;
+import com.mcagent.mcp.client.inventory.MenuReader;
 import com.mcagent.mcp.client.reflex.Reflexes;
 import com.mcagent.mcp.tools.McpTool;
 import com.mcagent.mcp.tools.ToolCategory;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -50,8 +57,11 @@ public final class ObserveTool implements McpTool {
 		return "Observe the local player and world: position, rotation, health, hunger, armor, air, held item, "
 				+ "attack cooldown, open screen, crosshair target, dead flag, dimension, time of day, weather. "
 				+ "Also 'threats' (hostile mobs within 16 blocks, nearest first) and 'events' (what happened since "
-				+ "the last observe: damage taken, reflex actions, kills). Call this first each turn. "
-				+ "Returns inWorld=false when no world is loaded.";
+				+ "the last observe: damage taken, reflex actions, kills). 'gui' tells whether a screen is open and "
+				+ "intercepting input (open=true means normal gameplay actions and chat commands may not reach the "
+				+ "world; read containers with get_container, or use screenshot for the visual layout). 'connection' "
+				+ "reports menu/connecting/connected/failed, the server address and any disconnect reason. "
+				+ "Call this first each turn. Returns inWorld=false when no world is loaded.";
 	}
 
 	@Override
@@ -70,6 +80,8 @@ public final class ObserveTool implements McpTool {
 			LocalPlayer p = mc.player;
 			if (mc.level == null || p == null) {
 				o.addProperty("inWorld", false);
+				o.add("gui", gui(mc));
+				o.add("connection", ConnectionState.describeState(mc));
 				return o;
 			}
 			o.addProperty("inWorld", true);
@@ -101,7 +113,9 @@ public final class ObserveTool implements McpTool {
 			JsonObject held = Json.item(p.getMainHandItem());
 			if (held != null) o.add("mainHand", held);
 			o.addProperty("attackStrength", Json.round2(p.getAttackStrengthScale(0.5F)));
-			if (mc.screen != null) o.addProperty("screen", mc.screen.getClass().getSimpleName());
+			if (mc.screen != null) o.addProperty("screen", ScreenNames.describe(mc.screen));
+			o.add("gui", gui(mc));
+			o.add("connection", ConnectionState.describeState(mc));
 			o.add("crosshair", crosshair(mc));
 			if (AgentControl.instance != null) o.add("agent", AgentControl.instance.status());
 			o.add("threats", Reflexes.describeThreats(mc, p, 6));
@@ -114,6 +128,53 @@ public final class ObserveTool implements McpTool {
 			}
 			return o;
 		});
+	}
+
+	/**
+	 * Whether a screen is intercepting input and, for container screens, a cheap summary.
+	 * Full slot contents stay behind get_container so observe remains the cheap default.
+	 */
+	private static JsonObject gui(Minecraft mc) {
+		final JsonObject o = new JsonObject();
+		final boolean open = mc.screen != null;
+		o.addProperty("open", open);
+		o.addProperty("inputCaptured", open);
+		if (!open) {
+			return o;
+		}
+
+		o.addProperty("screen", ScreenNames.describe(mc.screen));
+		final Component title = mc.screen.getTitle();
+		if (title != null) {
+			o.addProperty("title", title.getString());
+		}
+		o.addProperty("pauseScreen", mc.screen.isPauseScreen());
+		final boolean inventoryBased = mc.screen instanceof AbstractContainerScreen<?>;
+		o.addProperty("inventoryBased", inventoryBased);
+
+		if (!inventoryBased || mc.player == null) {
+			return o;
+		}
+
+		final AbstractContainerMenu menu = mc.player.containerMenu;
+		o.addProperty("containerType", MenuReader.typeId(menu));
+		o.addProperty("containerId", menu.containerId);
+		int filled = 0;
+		int empty = 0;
+		for (final Slot slot : menu.slots) {
+			if (MenuReader.isPlayerSlot(slot)) {
+				continue;
+			}
+			if (slot.hasItem()) {
+				filled++;
+			} else {
+				empty++;
+			}
+		}
+		o.addProperty("containerSlotsFilled", filled);
+		o.addProperty("containerSlotsEmpty", empty);
+
+		return o;
 	}
 
 	/** What the crosshair points at: {type:"block",pos,block,face} | {type:"entity",id,entity} | {type:"miss"}. */

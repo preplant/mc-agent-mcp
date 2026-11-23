@@ -42,9 +42,9 @@ public final class MenuReader {
 		if (menu instanceof InventoryMenu) return "inventory";
 		try {
 			var key = BuiltInRegistries.MENU.getKey(menu.getType());
-			return key == null ? menu.getClass().getSimpleName() : key.toString();
+			return key == null ? "menu" : key.toString();
 		} catch (UnsupportedOperationException e) {
-			return menu.getClass().getSimpleName();
+			return "menu";
 		}
 	}
 

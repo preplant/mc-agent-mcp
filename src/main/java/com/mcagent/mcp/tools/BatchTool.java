@@ -5,21 +5,29 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 /**
  * batch: run several tool calls in one request, in order. Cuts round trips for agents whose
  * every turn costs seconds (e.g. select a sword, walk to the zombie, attack, observe).
  * Each step goes through the normal tools/call path, so permissions and rate limits apply
- * per step.
+ * per step. Tools that return media cannot run here: the batch payload is JSON-only.
  */
 public final class BatchTool implements McpTool {
 	public static final int MAX_STEPS = 8;
 
 	/** (tool name, arguments) -> MCP tools/call result ({content, structuredContent, isError?}). */
 	private final BiFunction<String, JsonObject, JsonObject> invoker;
+	/** Whether a named tool can be carried by a JSON batch result. */
+	private final Predicate<String> batchable;
 
 	public BatchTool(BiFunction<String, JsonObject, JsonObject> invoker) {
+		this(invoker, name -> true);
+	}
+
+	public BatchTool(BiFunction<String, JsonObject, JsonObject> invoker, Predicate<String> batchable) {
 		this.invoker = invoker;
+		this.batchable = batchable;
 	}
 
 	@Override
@@ -98,6 +106,10 @@ public final class BatchTool implements McpTool {
 				if (name().equals(tool)) {
 					r.addProperty("ok", false);
 					r.addProperty("error", "batch cannot be nested");
+				} else if (!batchable.test(tool)) {
+					r.addProperty("ok", false);
+					r.addProperty("error", "tool '" + tool
+							+ "' returns media and cannot run inside batch; call it directly");
 				} else {
 					JsonObject a = st.has("args") && st.get("args").isJsonObject()
 							? st.getAsJsonObject("args") : new JsonObject();

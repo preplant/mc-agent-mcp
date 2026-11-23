@@ -5,16 +5,21 @@ import com.google.gson.JsonObject;
 import com.mcagent.mcp.McAgentMod;
 import com.mcagent.mcp.client.blocks.BlockDiffTracker;
 import com.mcagent.mcp.client.blocks.BlockScanner;
+import com.mcagent.mcp.client.capture.ScreenshotCapture;
 import com.mcagent.mcp.client.control.AgentControl;
 import com.mcagent.mcp.client.reflex.Reflexes;
 import com.mcagent.mcp.client.tools.AttackTool;
 import com.mcagent.mcp.client.tools.BreakBlockTool;
 import com.mcagent.mcp.client.tools.ChatTool;
 import com.mcagent.mcp.client.tools.ClickSlotTool;
+import com.mcagent.mcp.client.tools.ConnectTool;
 import com.mcagent.mcp.client.tools.CraftTool;
+import com.mcagent.mcp.client.tools.DisconnectTool;
 import com.mcagent.mcp.client.tools.GetContainerTool;
 import com.mcagent.mcp.client.tools.GetRecipesTool;
 import com.mcagent.mcp.client.tools.GoToTool;
+import com.mcagent.mcp.client.tools.ListServersTool;
+import com.mcagent.mcp.client.tools.ScreenshotTool;
 import com.mcagent.mcp.client.tools.SetReflexesTool;
 import com.mcagent.mcp.client.tools.TransferItemsTool;
 import com.mcagent.mcp.client.tools.GetBlockChangesTool;
@@ -84,7 +89,24 @@ public class McAgentClient implements ClientModInitializer {
 			crafting table). Furnace/chest: interact_block, transfer_items, get_container, stop {closeScreen:true}.
 			Night is dangerous: before dark, have a sword, food and a shelter (dig in and place a block above you),
 			or sleep in a bed with interact_block.
-			stop cancels everything. If a tool is rate-limited, wait retryAfterMs.""";
+			stop cancels everything. If a tool is rate-limited, wait retryAfterMs.
+
+			Screenshot: use 'screenshot' for a real image of the window (world, HUD, chat and any
+			open GUI). It returns an MCP image; call it directly, never through batch. Prefer observe and
+			get_container for cheap structured state, and request a screenshot only when the visual layout
+			matters. A minimized window does not present frames, so the tool returns an error instead of a stale
+			image.
+
+			observe.gui.open=true (or inputCaptured=true) means a screen is swallowing input: normal gameplay
+			actions and chat commands may not reach the world until it is closed with stop {closeScreen:true}.
+			While a container screen is open, read it with get_container, move stacks with transfer_items and
+			click slots with click_slot.
+
+			Servers: 'connect' {address:'play.example.net:25565'} uses Minecraft's normal multiplayer flow and
+			returns immediately with connecting=true; poll observe and read connection.state ('connecting',
+			'connected', 'failed' with a reason, or 'menu'). 'disconnect' leaves the world or cancels a
+			connection and returns to the menu; 'list_servers' reads saved multiplayer entries. A client that is
+			already in a world must disconnect before connecting elsewhere.""";
 
 
 	private static McpHttpServer server;
@@ -107,6 +129,8 @@ public class McAgentClient implements ClientModInitializer {
 		BlockScanner scanner = new BlockScanner();
 		BlockDiffTracker tracker = new BlockDiffTracker();
 		BlockDiffTracker.instance = tracker; // static handle for the Mixin hook
+		ScreenshotCapture capture = new ScreenshotCapture();
+		ScreenshotCapture.instance = capture; // static handle for the present-time Mixin hook
 		NotificationBus bus = new NotificationBus();
 		AgentControl control = new AgentControl();
 		AgentControl.instance = control; // static handle for the input/attack Mixins
@@ -118,6 +142,11 @@ public class McAgentClient implements ClientModInitializer {
 		ToolRegistry registry = new ToolRegistry();
 		registry.register(new PingTool());
 		registry.register(new ObserveTool(bridge, events));
+		registry.register(new ScreenshotTool(bridge, capture));
+		// multiplayer session
+		registry.register(new ConnectTool(bridge));
+		registry.register(new DisconnectTool(bridge));
+		registry.register(new ListServersTool(bridge));
 		registry.register(new GetBlocksTool(bridge, scanner));
 		registry.register(new ScanBlocksTool(bridge, scanner));
 		registry.register(new SubscribeBlocksTool(bridge, tracker));
@@ -150,7 +179,7 @@ public class McAgentClient implements ClientModInitializer {
 		registry.register(new SetReflexesTool(config.reflexes));
 
 		McpProtocol protocol = new McpProtocol(registry, "mc-agent-mcp", version, INSTRUCTIONS, policy);
-		registry.register(new BatchTool(protocol::invokeTool));
+		registry.register(new BatchTool(protocol::invokeTool, protocol::isBatchable));
 		server = new McpHttpServer(protocol, bus, config.bindAddress, config.port, config.authToken);
 		try {
 			server.start();
