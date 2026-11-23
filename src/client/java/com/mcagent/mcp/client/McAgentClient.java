@@ -154,8 +154,8 @@ public class McAgentClient implements ClientModInitializer {
 		server = new McpHttpServer(protocol, bus, config.bindAddress, config.port, config.authToken);
 		try {
 			server.start();
-			McAgentMod.LOGGER.info("[mcagent] connect your MCP client to {} with Bearer token: {}",
-					server.endpoint(), config.authToken);
+			McAgentMod.LOGGER.info("[mcagent] connect your MCP client to {} (Bearer token in config/mcagent.json)",
+					server.endpoint());
 		} catch (Exception e) {
 			McAgentMod.LOGGER.error("[mcagent] failed to start MCP server", e);
 			server = null;
